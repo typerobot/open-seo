@@ -19,6 +19,10 @@ const WORKERS_AI_PROVIDER_STUB = fileURLToPath(
  */
 const EAGER_DENYLIST: Array<{ pattern: RegExp; expected: string }> = [
   {
+    pattern: /\/src\/server\/mcp\/tools\//,
+    expected: "lazy-loaded when handling an MCP request or starting a SAM turn",
+  },
+  {
     pattern: /node_modules\/autumn-js\//,
     expected: "lazy-loaded behind the facade in src/server/billing/autumn.ts",
   },

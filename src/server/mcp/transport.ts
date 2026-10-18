@@ -19,7 +19,6 @@ import {
   type McpProps,
 } from "@/server/mcp/context";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
-import { createOpenSeoMcpServer } from "@/server/mcp/server";
 import { AuthRepository } from "@/server/auth/repositories/AuthRepository";
 import { resolveExistingActiveHostedOrganization } from "@/server/auth/default-hosted-organization";
 
@@ -99,6 +98,7 @@ async function handleLegacyJsonRequest(request: Request, props: McpProps) {
   // before the request completes. JSON mode silently drops server-to-client
   // requests (sampling/elicitation) and would hang the buffered response —
   // no OpenSEO tool issues them.
+  const { createOpenSeoMcpServer } = await import("@/server/mcp/server");
   const server = createOpenSeoMcpServer(props);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -126,17 +126,23 @@ function createRequestHandler(
   props: McpProps,
   allowedOriginHostnames?: string[],
 ) {
-  const modernHandler = createMcpHandler(() => createOpenSeoMcpServer(props), {
-    route: MCP_ROUTE,
-    allowedOriginHostnames,
-    legacy: "reject",
-    // MCP serving is strictly stateless: no notification is ever published,
-    // so refuse subscriptions/listen outright (in-band -32603 before the
-    // ack). The SSE streams it would otherwise hold open pin isolates for
-    // hours and turn every isolate death into a burst of exceededMemory
-    // request outcomes (EVE-95).
-    maxSubscriptions: 0,
-  });
+  const modernHandler = createMcpHandler(
+    async () => {
+      const { createOpenSeoMcpServer } = await import("@/server/mcp/server");
+      return createOpenSeoMcpServer(props);
+    },
+    {
+      route: MCP_ROUTE,
+      allowedOriginHostnames,
+      legacy: "reject",
+      // MCP serving is strictly stateless: no notification is ever published,
+      // so refuse subscriptions/listen outright (in-band -32603 before the
+      // ack). The SSE streams it would otherwise hold open pin isolates for
+      // hours and turn every isolate death into a burst of exceededMemory
+      // request outcomes (EVE-95).
+      maxSubscriptions: 0,
+    },
+  );
 
   return async (request: Request, env: unknown, ctx: ExecutionContext) => {
     if (request.method === "OPTIONS") {

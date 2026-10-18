@@ -26,7 +26,6 @@ import {
 import { SamSessionRepository } from "@/server/features/sam/SamSessionRepository";
 import { ProjectContextService } from "@/server/features/project-context/services/ProjectContextService";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
-import { buildSamMcpTools } from "@/server/features/sam/samChatTools";
 import { buildSamSkillSource } from "@/server/features/sam/samSkills";
 import { buildSamSystemPrompt } from "@/server/features/sam/samSystemPrompt";
 import {
@@ -379,6 +378,7 @@ export class SamChatAgent extends Think {
         scopes: [MCP_SCOPE],
       };
 
+      const { buildSamMcpTools } = await import("./samChatTools");
       return {
         tools: buildSamMcpTools(authContext, ctx.project, turn.turnId),
         // SAM runs complex multi-step work in one turn (site-read intake plus
