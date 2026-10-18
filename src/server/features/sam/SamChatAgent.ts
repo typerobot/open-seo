@@ -378,9 +378,10 @@ export class SamChatAgent extends Think {
         scopes: [MCP_SCOPE],
       };
 
-      const { buildSamMcpTools } = await import("./samChatTools");
+      // Loaded per turn, not at startup: the tool schemas are costly to build.
+      const samTools = await import("@/server/features/sam/samChatTools");
       return {
-        tools: buildSamMcpTools(authContext, ctx.project, turn.turnId),
+        tools: samTools.buildSamMcpTools(authContext, ctx.project, turn.turnId),
         // SAM runs complex multi-step work in one turn (site-read intake plus
         // a full research chain, multi-competitor sweeps), so the step budget
         // is generous; cost is bounded by per-step metering and the model
