@@ -174,11 +174,17 @@ const accessScopeHint =
  * env values always win, so a hand-managed Access application keeps
  * working — set both TEAM_DOMAIN and POLICY_AUD and nothing here provisions.
  */
-const resolveSelfHostAccess = (
-  stage: string,
-  provision: boolean,
-  workersSubdomain: string,
-) =>
+const resolveSelfHostAccess = ({
+  stage,
+  provision,
+  workersSubdomain,
+  customDomain,
+}: {
+  stage: string;
+  provision: boolean;
+  workersSubdomain: string;
+  customDomain: string;
+}) =>
   Effect.gen(function* () {
     let teamDomain = yield* optionalVar("TEAM_DOMAIN");
     let policyAud: Alchemy.Input<string> = yield* optionalVar("POLICY_AUD");
@@ -252,7 +258,13 @@ const resolveSelfHostAccess = (
         applicationId: "SelfHostAccess",
         policyName: `open-seo ${stage} self-host users`,
         applicationName: `open-seo ${stage}`,
-        domain: `${workerName(stage)}.${subdomain}`,
+        domain: customDomain || `${workerName(stage)}.${subdomain}`,
+        // Access sets cookies on every concrete hostname during login. Omit
+        // the disabled workers.dev URL so login returns to the custom domain.
+        // Wildcard preview hosts do not participate in that redirect chain.
+        additionalDomains: customDomain
+          ? [`*-${workerName(stage)}.${subdomain}`]
+          : undefined,
         emails: allowedEmails,
       });
       policyAud = application.aud;
@@ -320,6 +332,12 @@ export default Alchemy.Stack(
     );
     const databaseProvider = yield* optionalVar("DATABASE_PROVIDER");
     const workersSubdomain = yield* readWorkersSubdomain({ required: false });
+    const selfHostDomain =
+      stage === "selfhost"
+        ? z
+            .union([z.literal(""), z.hostname()])
+            .parse(yield* optionalVar("SELFHOST_DOMAIN"))
+        : "";
 
     // Auth needs an absolute BETTER_AUTH_URL. Prod sets it explicitly;
     // previews always derive it from the deterministic worker name — a wrong
@@ -357,11 +375,12 @@ export default Alchemy.Stack(
       authUrl = "";
     }
 
-    const access = yield* resolveSelfHostAccess(
+    const access = yield* resolveSelfHostAccess({
       stage,
-      authMode === "cloudflare_access" && !prod,
+      provision: authMode === "cloudflare_access" && !prod,
       workersSubdomain,
-    );
+      customDomain: selfHostDomain,
+    });
 
     // Created once and bound into BOTH workers — they share the same
     // D1/KV/R2 (and prod Hyperdrive). OAUTH_KV stays app-worker-only.
@@ -431,8 +450,12 @@ export default Alchemy.Stack(
 
     const app = yield* Cloudflare.Worker("open-seo", {
       name: workerName(stage),
-      // Prod serves the real domains; the zone is inferred from the hostname.
-      domain: prod ? ["app.openseo.so", "www.app.openseo.so"] : undefined,
+      // The zone is inferred from the hostname; Alchemy retains the domain
+      // and its DNS record across subsequent deployments.
+      domain: prod
+        ? ["app.openseo.so", "www.app.openseo.so"]
+        : selfHostDomain || undefined,
+      url: selfHostDomain ? false : undefined,
       // Prebuilt worker from `vite build` (@cloudflare/vite-plugin). The entry
       // exports the DO + WorkflowEntrypoint classes (re-exported by
       // src/server.ts), which `bundle: false` requires. Sibling chunks under

@@ -52,6 +52,13 @@ cp deploy/.env.selfhost.example .env.selfhost
 
 ## 4) Deploy
 
+To use your own hostname, set `SELFHOST_DOMAIN=seo.example.com` in
+`.env.selfhost`. Its parent zone must be active in the same Cloudflare account.
+The deploy creates the custom domain, DNS record, and Access gate, and disables
+the default workers.dev URL and version-preview URLs. Keep this setting for
+future deployments. The preview wildcard remains covered by the same Access
+policy; the disabled default URL is excluded from Access's login redirects.
+
 ```bash
 pnpm deploy:selfhost --yes
 ```
